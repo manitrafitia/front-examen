@@ -1,0 +1,161 @@
+import { Link, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import CustomButton from '../../components/CustomButton';
+import ListItem from '../../components/ListItem';
+import { useApi } from '../../hooks/useApi';
+import { Examen } from '../../services/type';
+
+export default function ExamensScreen() {
+    const [examens, setExamens] = useState<Examen[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const { getExamens } = useApi();
+    const { getMatiere } = useApi();
+    const router = useRouter();
+
+    useEffect(() => {
+        const getMatiereById = async (id: number) => {
+            try {
+                const response = await getMatiere(id);
+                return response.data;
+            } catch (error) {
+                console.error('Failed to fetch matiere:', error);
+                return null;
+            }
+        };
+
+        const fetchExamens = async () => {
+            try {
+                const response = await getExamens();
+                const examensData = response.data;
+
+                // On récupère les matières pour chaque examen
+                const examensWithMatieres = await Promise.all(
+                    examensData.map(async (examen: any) => {
+                        const matiere = await getMatiereById(examen.matiere_id);
+                        return {
+                            ...examen,
+                            matiere, // On ajoute la matière ici
+                        };
+                    })
+                );
+
+                setExamens(examensWithMatieres);
+            } catch (err) {
+                setError('Échec du chargement des examens');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchExamens();
+    }, []);
+
+    const handleRefresh = async () => {
+        setLoading(true);
+        try {
+            const response = await getExamens();
+            setExamens(response.data);
+        } catch (err) {
+            setError('Failed to refresh data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading && examens.length === 0) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={styles.center}>
+                <Text style={styles.error}>{error}</Text>
+                <CustomButton
+                    title="Retry"
+                    onPress={handleRefresh}
+                    variant="primary"
+                />
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.container}>
+            <FlatList
+                data={examens}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                    <Link href={`/examens/${item.id}`} asChild>
+                        <Pressable>
+                            <ListItem
+                                title={item.matiere?.nom || 'Unknown Subject'}
+                                subtitle={`Date: ${item.date ? new Date(item.date).toLocaleDateString() : 'N/A'}`}
+                                rightContent={
+                                    <Text style={styles.date}>
+                                        {item.notes?.length || 0} participants
+                                    </Text>
+                                }
+                            />
+                        </Pressable>
+                    </Link>
+                )}
+                refreshing={loading}
+                onRefresh={handleRefresh}
+                ListEmptyComponent={
+                    <View style={styles.center}>
+                        <Text>No exams found</Text>
+                    </View>
+                }
+            />
+
+            <Link href="/examens/create" asChild>
+                <Pressable style={styles.addButton}>
+                    <Text style={styles.addButtonText}>+</Text>
+                </Pressable>
+            </Link>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    error: {
+        color: 'red',
+        marginBottom: 20,
+    },
+    date: {
+        color: '#666',
+        fontSize: 12,
+    },
+    addButton: {
+        position: 'absolute',
+        bottom: 20,
+        right: 20,
+        backgroundColor: 'blue',
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 4,
+    },
+    addButtonText: {
+        color: 'white',
+        fontSize: 24,
+        lineHeight: 28,
+    },
+});

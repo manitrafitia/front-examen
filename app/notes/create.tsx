@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import CustomButton from '../../components/CustomButton';
 import FormInput from '../../components/FormInput';
@@ -34,11 +34,11 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function CreateNote() {
-  const { 
-    control, 
-    handleSubmit, 
-    formState: { errors }, 
-    setValue 
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    setValue
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -49,33 +49,62 @@ export default function CreateNote() {
     }
   });
 
-  const { createNote, getExamens, getMatieres } = useApi();
-  const [examens, setExamens] = useState<Examen[]>([]);
+  const { getMatiere, createNote, getExamens, getMatieres } = useApi();
+  const [examens, setExamens] = useState<(Examen & { matiereNom: string; dateFormatted: string })[]>([]);
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const getMatiereById = async (id: number): Promise<{ nom: string }> => {
+    try {
+      const response = await getMatiere(id);
+      return response.data || { nom: 'Matière inconnue' };
+    } catch (error) {
+      console.error('Failed to fetch matiere:', error);
+      return { nom: 'Matière inconnue' };
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+        
         const [examResponse, matieresResponse] = await Promise.all([
           getExamens(),
           getMatieres()
         ]);
-        setExamens(examResponse.data);
+
+        // Charger les noms de matières pour chaque examen
+        const examensWithMatiere = await Promise.all(
+          examResponse.data.map(async (examen: Examen) => {
+            const matiere = await getMatiereById(examen.matiere_id);
+            return { 
+              ...examen, 
+              matiereNom: matiere.nom,
+              dateFormatted: examen.date ? new Date(examen.date).toLocaleDateString() : 'Date inconnue'
+            };
+          })
+        );
+
+        setExamens(examensWithMatiere);
         setMatieres(matieresResponse.data);
-        
-        if (examResponse.data.length > 0) {
-          setValue('examen_id', examResponse.data[0].id);
-        }
-        if (matieresResponse.data.length > 0) {
-          setValue('matiere_id', matieresResponse.data[0].id);
+
+        // Définir les valeurs par défaut
+        if (examensWithMatiere.length > 0) {
+          setValue('examen_id', examensWithMatiere[0].id);
+          // Définir automatiquement la matière correspondante à l'examen sélectionné
+          setValue('matiere_id', examensWithMatiere[0].matiere_id);
         }
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error);
+        setError('Échec du chargement des données');
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
@@ -86,6 +115,7 @@ export default function CreateNote() {
       router.back();
     } catch (error) {
       console.error("Échec de la création de la note", error);
+      setError("Échec de la création de la note");
     }
   };
 
@@ -93,6 +123,59 @@ export default function CreateNote() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (error) {
+    // Définition de fetchData pour recharger les données lors d'une erreur
+    const fetchData = async () => {
+      try {
+      setLoading(true);
+      setError(null);
+
+      const [examResponse, matieresResponse] = await Promise.all([
+        getExamens(),
+        getMatieres()
+      ]);
+
+      const examensWithMatiere = await Promise.all(
+        examResponse.data.map(async (examen: Examen) => {
+        const matiere = await getMatiereById(examen.matiere_id);
+        return { 
+          ...examen, 
+          matiereNom: matiere.nom,
+          dateFormatted: examen.date ? new Date(examen.date).toLocaleDateString() : 'Date inconnue'
+        };
+        })
+      );
+
+      setExamens(examensWithMatiere);
+      setMatieres(matieresResponse.data);
+
+      if (examensWithMatiere.length > 0) {
+        setValue('examen_id', examensWithMatiere[0].id);
+        setValue('matiere_id', examensWithMatiere[0].matiere_id);
+      }
+      } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+      setError('Échec du chargement des données');
+      } finally {
+      setLoading(false);
+      }
+    };
+
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+        <CustomButton
+          title="Réessayer"
+          onPress={() => {
+            setError(null);
+            setLoading(true);
+            fetchData();
+          }}
+        />
       </View>
     );
   }
@@ -113,7 +196,7 @@ export default function CreateNote() {
         name="examen_id"
         label="Examen"
         items={examens.map(e => ({
-          label: `${e.matiere?.nom || 'Inconnu'} - ${new Date(e.date).toLocaleDateString()}`,
+          label: `${e.matiereNom} - ${e.dateFormatted}`,
           value: e.id
         }))}
         error={errors.examen_id?.message}
@@ -123,18 +206,23 @@ export default function CreateNote() {
         control={control}
         name="matiere_id"
         label="Matière"
-        items={matieres.map(m => ({ label: m.nom, value: m.id }))}
+        items={matieres.map(m => ({ 
+          label: m.nom || 'Matière inconnue', 
+          value: m.id 
+        }))}
         error={errors.matiere_id?.message}
       />
 
       <FormInput
         control={control}
-        name="value"
+        name="valeur"
         label="Note (0-20)"
         placeholder="Entrez une note entre 0 et 20"
         error={errors.valeur?.message}
         keyboardType="decimal-pad"
       />
+
+      {error && <Text style={styles.error}>{error}</Text>}
 
       <CustomButton
         title="Enregistrer la note"
@@ -157,5 +245,10 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 24
+  },
+  error: {
+    color: 'red',
+    marginBottom: 10,
+    textAlign: 'center'
   }
-});
+});z

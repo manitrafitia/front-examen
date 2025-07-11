@@ -7,45 +7,65 @@ import { useApi } from '../../hooks/useApi';
 import { Eleve, Examen, Note } from '../../services/type';
 
 export default function NotesScreen() {
-    const [notes, setNotes] = useState<(Note & { eleve?: Eleve; examen?: Examen })[]>([]);
+    const [notes, setNotes] = useState<(Note & {
+        eleve?: Partial<Eleve> & { fullName: string };
+        examen?: Partial<Examen> & { matiereName: string; dateFormatted: string };
+    })[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { getNotes, getEleve, getExamen } = useApi();
+    const { getNotes, getEleve, getExamen, getMatiere } = useApi();
     const router = useRouter();
-    const { getMatiere } = useApi();
+    const getEleveById = async (id: number) => {
+        try {
+            const response = await getEleve(id);
+            return {
+                ...(response.data || {}),
+                fullName: response.data
+                    ? `${response.data.prenom || ''} ${response.data.nom || ''}`.trim()
+                    : 'Élève inconnu'
+            };
+        } catch (error) {
+            console.error('Failed to fetch student:', error);
+            return { fullName: 'Élève inconnu' };
+        }
+    };
+
+    const getExamenById = async (id: number) => {
+        try {
+            const response = await getExamen(id);
+            const examen = response.data;
+            let matiereName = 'Matière inconnue';
+
+            if (examen?.matiere_id) {
+                try {
+                    const matiereResponse = await getMatiere(examen.matiere_id);
+                    matiereName = matiereResponse.data?.nom || matiereName;
+                } catch (error) {
+                    console.error('Failed to fetch matiere:', error);
+                }
+            }
+
+            return {
+                ...(examen || {}),
+                matiereName,
+                dateFormatted: examen?.date
+                    ? new Date(examen.date).toLocaleDateString()
+                    : 'Date inconnue'
+            };
+        } catch (error) {
+            console.error('Failed to fetch exam:', error);
+            return {
+                matiereName: 'Matière inconnue',
+                dateFormatted: 'Date inconnue'
+            };
+        }
+    };
 
     useEffect(() => {
-        const getEleveById = async (id: number) => {
-            try {
-                const response = await getEleve(id);
-                return response.data;
-            } catch (error) {
-                console.error('Failed to fetch student:', error);
-                return null;
-            }
-        };
-
-        const getExamenById = async (id: number) => {
-            try {
-                const response = await getExamen(id);
-                return response.data;
-            } catch (error) {
-                console.error('Failed to fetch exam:', error);
-                return null;
-            }
-        };
-
-        const getMatiereById = async (id: number) => {
-            try {
-                const response = await getMatiere(id);
-                return response.data;
-            } catch (error) {
-                console.error('Failed to fetch matiere:', error);
-                return null;
-            }
-        };
         const fetchNotes = async () => {
             try {
+                setLoading(true);
+                setError(null);
                 const response = await getNotes();
                 const notesData = response.data;
 
@@ -56,26 +76,18 @@ export default function NotesScreen() {
                             getExamenById(note.examen_id)
                         ]);
 
-                        let matiere = null;
-                        if (examen?.matiere_id) {
-                            matiere = await getMatiereById(examen.matiere_id);
-                        }
-
                         return {
                             ...note,
                             eleve,
-                            examen: {
-                                ...examen,
-                                matiere
-                            }
+                            examen
                         };
                     })
                 );
 
                 setNotes(notesWithDetails);
             } catch (err) {
-                setError('Failed to load grades');
                 console.error(err);
+                setError('Échec du chargement des notes');
             } finally {
                 setLoading(false);
             }
@@ -88,9 +100,28 @@ export default function NotesScreen() {
         setLoading(true);
         try {
             const response = await getNotes();
-            setNotes(response.data);
+            const notesData = response.data;
+
+            const notesWithDetails = await Promise.all(
+                notesData.map(async (note: Note) => {
+                    const [eleve, examen] = await Promise.all([
+                        getEleveById(note.eleve_id),
+                        getExamenById(note.examen_id)
+                    ]);
+
+                    return {
+                        ...note,
+                        eleve,
+                        examen
+                    };
+                })
+            );
+
+            setNotes(notesWithDetails);
+            setError(null);
         } catch (err) {
-            setError('Failed to refresh data');
+            console.error(err);
+            setError('Échec du rafraîchissement des données');
         } finally {
             setLoading(false);
         }
@@ -109,7 +140,7 @@ export default function NotesScreen() {
             <View style={styles.center}>
                 <Text style={styles.error}>{error}</Text>
                 <CustomButton
-                    title="Retry"
+                    title="Réessayer"
                     onPress={handleRefresh}
                     variant="primary"
                 />
@@ -126,12 +157,12 @@ export default function NotesScreen() {
                     <Link href={`/notes/${item.id}`} asChild>
                         <Pressable>
                             <ListItem
-                                title={`${item.eleve?.prenom || 'Student'} ${item.eleve?.nom || ''}`}
-                                subtitle={`Exam: ${item.examen?.matiere?.nom || 'Unknown'} - ${item.valeur}/20`}
+                                title={item.eleve?.fullName || 'Élève inconnu'}
+                                subtitle={`${item.examen?.matiereName || 'Matière inconnue'} - ${item.valeur}/20`}
                                 rightContent={
                                     <View style={styles.rightContent}>
                                         <Text style={styles.date}>
-                                            {item.examen?.date ? new Date(item.examen.date).toLocaleDateString() : ''}
+                                            {item.examen?.dateFormatted}
                                         </Text>
                                     </View>
                                 }
@@ -143,7 +174,7 @@ export default function NotesScreen() {
                 onRefresh={handleRefresh}
                 ListEmptyComponent={
                     <View style={styles.center}>
-                        <Text>No grades found</Text>
+                        <Text>Aucune note trouvée</Text>
                     </View>
                 }
             />

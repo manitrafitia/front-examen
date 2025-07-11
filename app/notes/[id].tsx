@@ -20,29 +20,63 @@ export default function NoteDetail() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [examens, setExamens] = useState<Examen[]>([]);
+  const [examens, setExamens] = useState<(Examen & { matiereName: string; dateFormatted: string })[]>([]);
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
-  const { getNote, updateNote, deleteNote, getExamens, getMatieres } = useApi();
+  const { getNote, updateNote, deleteNote, getExamens, getMatieres, getMatiere } = useApi();
 
-  const { control, handleSubmit, reset, formState: { isSubmitting }, setValue } = useForm<FormData>();
+  const { control, handleSubmit, reset, formState: { isSubmitting }, setValue, watch } = useForm<FormData>();
 
   // Fetch note data and related data
   useEffect(() => {
+    const getExamenDetails = async (examen: Examen) => {
+      let matiereName = 'Matière inconnue';
+      if (examen.matiere_id) {
+        try {
+          const matiereResponse = await getMatiere(examen.matiere_id);
+          matiereName = matiereResponse.data?.nom || matiereName;
+        } catch (error) {
+          console.error('Failed to fetch matiere:', error);
+        }
+      }
+      
+      return {
+        ...examen,
+        matiereName,
+        dateFormatted: examen.date ? new Date(examen.date).toLocaleDateString() : 'Date inconnue'
+      };
+    };
+
     const fetchData = async () => {
       try {
+        setLoading(true);
+        
         const [noteResponse, examResponse, matieresResponse] = await Promise.all([
           getNote(Number(id)),
           getExamens(),
           getMatieres()
         ]);
         
-        setExamens(examResponse.data);
+        // Enhance examens with matiere data
+        const enhancedExamens = await Promise.all(
+          examResponse.data.map(getExamenDetails)
+        );
+
+        setExamens(enhancedExamens);
         setMatieres(matieresResponse.data);
-        reset(noteResponse.data);
+        
+        // Set form values with fallbacks
+        const noteData = noteResponse.data || {};
+        reset({
+          eleve_id: noteData.eleve_id || 0,
+          examen_id: noteData.examen_id || (enhancedExamens[0]?.id || 0),
+          valeur: noteData.valeur || 0,
+          matiere_id: noteData.matiere_id || (matieresResponse.data[0]?.id || 0)
+        });
       } catch (error) {
-        Alert.alert('Error', 'Failed to load note details');
+        console.error(error);
+        Alert.alert('Erreur', 'Échec du chargement des détails de la note');
       } finally {
         setLoading(false);
       }
@@ -96,29 +130,31 @@ export default function NoteDetail() {
         valeur: Number(data.valeur)
       });
       setIsEditing(false);
-      Alert.alert('Success', 'Note updated successfully');
+      Alert.alert('Succès', 'Note mise à jour avec succès');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update note');
+      console.error(error);
+      Alert.alert('Erreur', 'Échec de la mise à jour de la note');
     }
   };
 
   const handleDelete = async () => {
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this note?',
+      'Confirmer la suppression',
+      'Êtes-vous sûr de vouloir supprimer cette note ?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Supprimer',
           style: 'destructive',
           onPress: async () => {
             setDeleting(true);
             try {
               await deleteNote(Number(id));
               router.back();
-              Alert.alert('Success', 'Note deleted successfully');
+              Alert.alert('Succès', 'Note supprimée avec succès');
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete note');
+              console.error(error);
+              Alert.alert('Erreur', 'Échec de la suppression de la note');
             } finally {
               setDeleting(false);
             }
@@ -135,6 +171,10 @@ export default function NoteDetail() {
       </View>
     );
   }
+
+  const currentValues = watch();
+  const currentExamen = examens.find(e => e.id === currentValues.examen_id);
+  const currentMatiere = matieres.find(m => m.id === currentValues.matiere_id);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -154,18 +194,27 @@ export default function NoteDetail() {
             control={control}
             name="examen_id"
             label="Examen *"
-            items={examens.map(e => ({
-              label: `${e.matiere?.nom || 'Inconnu'} - ${new Date(e.date).toLocaleDateString()}`,
+            items={examens.map((e) => ({
+              label: `${e.matiereName} - ${e.dateFormatted}`,
               value: e.id
             }))}
             error={formErrors.examen_id}
+            onValueChange={(value: number) => {
+              const selectedExamen = examens.find((e) => e.id === value);
+              if (selectedExamen?.matiere_id) {
+                setValue('matiere_id', selectedExamen.matiere_id);
+              }
+            }}
           />
 
           <PickerInput
             control={control}
             name="matiere_id"
             label="Matière *"
-            items={matieres.map(m => ({ label: m.nom, value: m.id }))}
+            items={matieres.map((m) => ({ 
+              label: m.nom || 'Matière inconnue', 
+              value: m.id 
+            }))}
             error={formErrors.matiere_id}
           />
 
@@ -181,13 +230,13 @@ export default function NoteDetail() {
 
           <View style={styles.buttonGroup}>
             <CustomButton
-              title="Save"
+              title="Enregistrer"
               onPress={handleSubmit(handleUpdate)}
               loading={isSubmitting}
               variant="primary"
             />
             <CustomButton
-              title="Cancel"
+              title="Annuler"
               onPress={() => setIsEditing(false)}
               variant="outline"
             />
@@ -200,6 +249,7 @@ export default function NoteDetail() {
               control={control}
               name="eleve_id"
               label="ID de l'élève"
+              value={currentValues.eleve_id?.toString() || 'Non spécifié'}
               editable={false}
             />
 
@@ -207,7 +257,9 @@ export default function NoteDetail() {
               control={control}
               name="examen_id"
               label="Examen"
-              value={examens.find(e => e.id === control._formValues.examen_id)?.matiere?.nom || ''}
+              value={currentExamen 
+                ? `${currentExamen.matiereName} - ${currentExamen.dateFormatted}`
+                : 'Examen inconnu'}
               editable={false}
             />
 
@@ -215,7 +267,7 @@ export default function NoteDetail() {
               control={control}
               name="matiere_id"
               label="Matière"
-              value={matieres.find(m => m.id === control._formValues.matiere_id)?.nom || ''}
+              value={currentMatiere?.nom || 'Matière inconnue'}
               editable={false}
             />
 
@@ -223,18 +275,19 @@ export default function NoteDetail() {
               control={control}
               name="valeur"
               label="Note"
+              value={currentValues.valeur?.toString() || '0'}
               editable={false}
             />
           </View>
 
           <View style={styles.buttonGroup}>
             <CustomButton
-              title="Edit"
+              title="Modifier"
               onPress={() => setIsEditing(true)}
               variant="primary"
             />
             <CustomButton
-              title="Delete"
+              title="Supprimer"
               onPress={handleDelete}
               loading={deleting}
               disabled={deleting}

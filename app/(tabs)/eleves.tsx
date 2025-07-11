@@ -6,10 +6,15 @@ import ListItem from '../../components/ListItem';
 import { useApi } from '../../hooks/useApi';
 import { Eleve } from '../../services/type';
 
+// Define the available class options
+const CLASS_OPTIONS = ['All', 'L1', 'L2', 'L3', 'M1', 'M2'];
+
 export default function ElevesScreen() {
   const [eleves, setEleves] = useState<Eleve[]>([]);
+  const [filteredEleves, setFilteredEleves] = useState<Eleve[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedClass, setSelectedClass] = useState<string>('All');
   const { getEleves } = useApi();
   const router = useRouter();
 
@@ -18,6 +23,7 @@ export default function ElevesScreen() {
       try {
         const response = await getEleves();
         setEleves(response.data);
+        setFilteredEleves(response.data); // Initialize filtered list with all students
       } catch (err) {
         setError('Failed to load students');
         console.error(err);
@@ -28,6 +34,15 @@ export default function ElevesScreen() {
 
     fetchEleves();
   }, []);
+
+  // Filter students when selectedClass changes
+  useEffect(() => {
+    if (selectedClass === 'All') {
+      setFilteredEleves(eleves);
+    } else {
+      setFilteredEleves(eleves.filter(eleve => eleve.classe === selectedClass));
+    }
+  }, [selectedClass, eleves]);
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -64,15 +79,39 @@ export default function ElevesScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Class filter selector */}
+      <View style={styles.filterContainer}>
+        <Text style={styles.filterLabel}>Filtre par niveau:</Text>
+        <View style={styles.filterButtons}>
+          {CLASS_OPTIONS.map((classOption) => (
+            <Pressable
+              key={classOption}
+              style={[
+                styles.filterButton,
+                selectedClass === classOption && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedClass(classOption)}
+            >
+              <Text style={[
+                styles.filterButtonText,
+                selectedClass === classOption && styles.filterButtonTextActive
+              ]}>
+                {classOption}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       <FlatList
-        data={eleves}
+        data={filteredEleves}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <Link href={`/eleves/${item.id}`} asChild>
             <Pressable>
               <ListItem 
                 title={`${item.prenom} ${item.nom}`}
-                subtitle={`Class: ${item.classe}`}
+                subtitle={`Niveau: ${item.classe}`}
                 rightContent={
                   <Text style={styles.date}>
                     {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
@@ -86,7 +125,7 @@ export default function ElevesScreen() {
         onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text>No students found</Text>
+            <Text>No students found{selectedClass !== 'All' ? ` in ${selectedClass}` : ''}</Text>
           </View>
         }
       />
@@ -134,5 +173,35 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 24,
     lineHeight: 28,
+  },
+  filterContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  filterButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+  },
+  filterButtonActive: {
+    backgroundColor: 'blue',
+  },
+  filterButtonText: {
+    color: '#333',
+  },
+  filterButtonTextActive: {
+    color: 'white',
   },
 });

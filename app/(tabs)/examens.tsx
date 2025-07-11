@@ -7,42 +7,42 @@ import { useApi } from '../../hooks/useApi';
 import { Examen } from '../../services/type';
 
 export default function ExamensScreen() {
-    const [examens, setExamens] = useState<Examen[]>([]);
+    const [examens, setExamens] = useState<(Examen & { matiere?: { nom: string } })[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { getExamens } = useApi();
-    const { getMatiere } = useApi();
+    const { getExamens, getMatiere } = useApi();
     const router = useRouter();
-
-    useEffect(() => {
         const getMatiereById = async (id: number) => {
             try {
                 const response = await getMatiere(id);
                 return response.data;
             } catch (error) {
                 console.error('Failed to fetch matiere:', error);
-                return null;
+                return { nom: 'Matière inconnue' }; // Retourne un objet par défaut
             }
         };
-
+    useEffect(() => {
         const fetchExamens = async () => {
             try {
+                setLoading(true);
                 const response = await getExamens();
                 const examensData = response.data;
 
                 // On récupère les matières pour chaque examen
                 const examensWithMatieres = await Promise.all(
-                    examensData.map(async (examen: any) => {
-                        const matiere = await getMatiereById(examen.matiere_id);
+                    examensData.map(async (examen: Examen) => {
+                        const matiere = examen.matiere_id ? await getMatiereById(examen.matiere_id) : null;
                         return {
                             ...examen,
-                            matiere, // On ajoute la matière ici
+                            matiere: matiere || { nom: 'Sans matière' }, // Valeur par défaut
                         };
                     })
                 );
 
                 setExamens(examensWithMatieres);
+                setError(null);
             } catch (err) {
+                console.error('Fetch examens error:', err);
                 setError('Échec du chargement des examens');
             } finally {
                 setLoading(false);
@@ -56,8 +56,22 @@ export default function ExamensScreen() {
         setLoading(true);
         try {
             const response = await getExamens();
-            setExamens(response.data);
+            const examensData = response.data;
+
+            const examensWithMatieres = await Promise.all(
+                examensData.map(async (examen: Examen) => {
+                    const matiere = examen.matiere_id ? await getMatiereById(examen.matiere_id) : null;
+                    return {
+                        ...examen,
+                        matiere: matiere || { nom: 'Sans matière' },
+                    };
+                })
+            );
+
+            setExamens(examensWithMatieres);
+            setError(null);
         } catch (err) {
+            console.error('Refresh error:', err);
             setError('Failed to refresh data');
         } finally {
             setLoading(false);
@@ -94,7 +108,7 @@ export default function ExamensScreen() {
                     <Link href={`/examens/${item.id}`} asChild>
                         <Pressable>
                             <ListItem
-                                title={item.matiere?.nom || 'Unknown Subject'}
+                                title={item.matiere?.nom || 'Sans matière'}
                                 subtitle={`Date: ${item.date ? new Date(item.date).toLocaleDateString() : 'N/A'}`}
                                 rightContent={
                                     <Text style={styles.date}>
@@ -109,7 +123,7 @@ export default function ExamensScreen() {
                 onRefresh={handleRefresh}
                 ListEmptyComponent={
                     <View style={styles.center}>
-                        <Text>No exams found</Text>
+                        <Text>Aucun examen trouvé</Text>
                     </View>
                 }
             />

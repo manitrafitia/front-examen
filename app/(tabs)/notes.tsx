@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 import ListItem from '../../components/ListItem';
 import { useApi } from '../../hooks/useApi';
@@ -13,8 +13,10 @@ export default function NotesScreen() {
     })[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [filter, setFilter] = useState('');
     const { getNotes, getEleve, getExamen, getMatiere } = useApi();
     const router = useRouter();
+
     const getEleveById = async (id: number) => {
         try {
             const response = await getEleve(id);
@@ -127,6 +129,14 @@ export default function NotesScreen() {
         }
     };
 
+    // FRONTEND FILTERING
+    const filteredNotes = notes.filter(note => {
+        const eleveName = note.eleve?.fullName?.toLowerCase() || '';
+        const matiereName = note.examen?.matiereName?.toLowerCase() || '';
+        const search = filter.toLowerCase();
+        return eleveName.includes(search) || matiereName.includes(search);
+    });
+
     if (loading && notes.length === 0) {
         return (
             <View style={styles.center}>
@@ -150,8 +160,14 @@ export default function NotesScreen() {
 
     return (
         <View style={styles.container}>
+            <TextInput
+                style={styles.filterInput}
+                placeholder="Filtrer par élève ou matière"
+                value={filter}
+                onChangeText={setFilter}
+            />
             <FlatList
-                data={notes}
+                data={filteredNotes}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                     <Link href={`/notes/${item.id}`} asChild>
@@ -225,5 +241,12 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 24,
         lineHeight: 28,
+    },
+    filterInput: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        margin: 10,
+        padding: 8,
+        borderRadius: 5,
     },
 });

@@ -1,7 +1,6 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 import ListItem from '../../components/ListItem';
 import { useApi } from '../../hooks/useApi';
@@ -18,23 +17,13 @@ export default function ElevesScreen() {
   const [selectedClass, setSelectedClass] = useState<string>('All');
   const { getEleves } = useApi();
   const router = useRouter();
-  const fadeAnim = useState(new Animated.Value(0))[0];
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, []);
 
   useEffect(() => {
     const fetchEleves = async () => {
       try {
         const response = await getEleves();
         setEleves(response.data);
-        setFilteredEleves(response.data);
+        setFilteredEleves(response.data); // Initialize filtered list with all students
       } catch (err) {
         setError('Failed to load students');
         console.error(err);
@@ -46,6 +35,7 @@ export default function ElevesScreen() {
     fetchEleves();
   }, []);
 
+  // Filter students when selectedClass changes
   useEffect(() => {
     if (selectedClass === 'All') {
       setFilteredEleves(eleves);
@@ -61,7 +51,6 @@ export default function ElevesScreen() {
       setEleves(response.data);
     } catch (err) {
       setError('Failed to refresh data');
-    console.error(err);
     } finally {
       setLoading(false);
     }
@@ -70,7 +59,7 @@ export default function ElevesScreen() {
   if (loading && eleves.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6D28D9" />
+        <ActivityIndicator size="large" />
       </View>
     );
   }
@@ -78,36 +67,28 @@ export default function ElevesScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <MaterialIcons name="error-outline" size={48} color="#EF4444" style={styles.errorIcon} />
         <Text style={styles.error}>{error}</Text>
-        <CustomButton 
-          title="Retry" 
-          onPress={handleRefresh} 
+        <CustomButton
+          title="Retry"
+          onPress={handleRefresh}
           variant="primary"
-          icon={<MaterialIcons name="refresh" size={20} color="white" />}
         />
       </View>
     );
   }
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Students List</Text>
-      </View>
-
+    <View style={styles.container}>
       {/* Class filter selector */}
       <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>Filter by class:</Text>
+        <Text style={styles.filterLabel}>Filtre par niveau:</Text>
         <View style={styles.filterButtons}>
           {CLASS_OPTIONS.map((classOption) => (
             <Pressable
               key={classOption}
-              style={({ pressed }) => [
+              style={[
                 styles.filterButton,
-                selectedClass === classOption && styles.filterButtonActive,
-                pressed && styles.filterButtonPressed
+                selectedClass === classOption && styles.filterButtonActive
               ]}
               onPress={() => setSelectedClass(classOption)}
             >
@@ -122,149 +103,93 @@ export default function ElevesScreen() {
         </View>
       </View>
 
-      {/* Students list */}
       <FlatList
         data={filteredEleves}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <Link href={`/eleves/${item.id}`} asChild>
             <Pressable>
-              {({ pressed }) => (
-                <View style={[styles.listItemContainer, pressed && styles.listItemPressed]}>
-                  <ListItem 
-                    title={`${item.prenom} ${item.nom}`}
-                    subtitle={`Class: ${item.classe}`}
-                    rightContent={
-                      <View style={styles.dateContainer}>
-                        <MaterialIcons name="event" size={14} color="#6B7280" />
-                        <Text style={styles.date}>
-                          {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
-                        </Text>
-                      </View>
-                    }
-                  />
-                </View>
-              )}
+              <ListItem
+                title={`${item.prenom} ${item.nom}`}
+                subtitle={`Niveau: ${item.classe}`}
+                rightContent={
+                  <View style={styles.rightContent}>
+                    <Text style={styles.date}>
+                      {item.id}
+                    </Text>
+                  </View>
+                }
+              />
             </Pressable>
           </Link>
         )}
         refreshing={loading}
         onRefresh={handleRefresh}
-        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="school" size={48} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No students found{selectedClass !== 'All' ? ` in ${selectedClass}` : ''}</Text>
+          <View style={styles.center}>
+            <Text>No students found{selectedClass !== 'All' ? ` in ${selectedClass}` : ''}</Text>
           </View>
         }
       />
 
-      {/* Add button */}
       <Link href="/eleves/create" asChild>
-        <Pressable style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
-          <MaterialIcons name="add" size={28} color="white" />
+        <Pressable style={styles.addButton}>
+          <Text style={styles.addButtonText}>+</Text>
         </Pressable>
       </Link>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: '#6D28D9',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: 'white',
-    textAlign: 'center',
+    backgroundColor: '#fff',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  errorIcon: {
-    marginBottom: 16,
   },
   error: {
-    color: '#EF4444',
-    fontSize: 18,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  listContent: {
-    paddingBottom: 20,
-  },
-  listItemContainer: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  listItemPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    color: 'red',
+    marginBottom: 20,
   },
   date: {
-    color: '#6B7280',
+    color: '#666',
     fontSize: 12,
+  },
+  rightContent: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    minWidth: 80,
   },
   addButton: {
     position: 'absolute',
-    bottom: 30,
-    right: 30,
-    backgroundColor: '#6D28D9',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 20,
+    right: 20,
+    backgroundColor: 'blue',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-    transform: [{ scale: 1 }],
+    elevation: 4,
   },
-  addButtonPressed: {
-    transform: [{ scale: 0.95 }],
-    backgroundColor: '#5B21B6',
+  addButtonText: {
+    color: 'white',
+    fontSize: 24,
+    lineHeight: 28,
   },
   filterContainer: {
     padding: 16,
-    backgroundColor: 'white',
-    margin: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   filterLabel: {
     fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 12,
-    color: '#374151',
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   filterButtons: {
     flexDirection: 'row',
@@ -272,37 +197,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#EDE9FE',
-    minWidth: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
   },
   filterButtonActive: {
-    backgroundColor: '#6D28D9',
-  },
-  filterButtonPressed: {
-    transform: [{ scale: 0.96 }],
+    backgroundColor: 'blue',
   },
   filterButtonText: {
-    color: '#6D28D9',
-    fontWeight: '500',
+    color: '#333',
   },
   filterButtonTextActive: {
     color: 'white',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#9CA3AF',
-    textAlign: 'center',
   },
 });

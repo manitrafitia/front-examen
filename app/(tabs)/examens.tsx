@@ -18,7 +18,7 @@ export default function ExamensScreen() {
                 return response.data;
             } catch (error) {
                 console.error('Failed to fetch matiere:', error);
-                return { nom: 'Matière inconnue' }; // Retourne un objet par défaut
+                return { nom: 'Matière inconnue' }; 
             }
         };
     useEffect(() => {
@@ -28,13 +28,12 @@ export default function ExamensScreen() {
                 const response = await getExamens();
                 const examensData = response.data;
 
-                // On récupère les matières pour chaque examen
                 const examensWithMatieres = await Promise.all(
                     examensData.map(async (examen: Examen) => {
                         const matiere = examen.matiere_id ? await getMatiereById(examen.matiere_id) : null;
                         return {
                             ...examen,
-                            matiere: matiere || { nom: 'Sans matière' }, // Valeur par défaut
+                            matiere: matiere || { nom: 'Sans matière' }, 
                         };
                     })
                 );

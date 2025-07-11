@@ -1,9 +1,8 @@
-// services/api.ts
 import axios from 'axios';
-import { API_CONFIG } from '../constants/config'; // Import the named export
+import { API_CONFIG } from '../constants/config';
 
 const api = axios.create({
-  baseURL: API_CONFIG.API_URL, // Use the imported API_CONFIG
+  baseURL: API_CONFIG.API_URL, 
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
@@ -13,7 +12,6 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // You can add auth tokens here if needed
     return config;
   },
   (error) => Promise.reject(error)

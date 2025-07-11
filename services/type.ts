@@ -1,10 +1,9 @@
-// services/types.ts
 export interface Eleve {
     id: number;
     nom: string;
     prenom: string;
     classe: string;
-    createdAt?: string;  // Optional fields if your API returns them
+    createdAt?: string; 
     updatedAt?: string;
 }
 

@@ -2,13 +2,11 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Safely get the API URL from environment variables
 const getApiUrl = () => {
-    // Try all possible ways to get the API URL
     return (
         process.env.EXPO_PUBLIC_API_URL ||
         Constants.expoConfig?.extra?.apiUrl ||
-        'http://localhost:8000' // Default fallback
+        'http://localhost:8000'
     );
 };
 
@@ -67,7 +65,7 @@ export const API_CONFIG = {
     //   API_URL: getApiUrl(),
     API_URL: Platform.select({
         ios: 'http://localhost:8000',
-        android: 'http://192.168.10.25:8000'
+        android: 'http://192.168.1.24:8000'
     }),
     timeout: 10000,
     maxRetries: 3,

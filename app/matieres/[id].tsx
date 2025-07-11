@@ -9,10 +9,8 @@ import CustomButton from '../../components/CustomButton';
 import FormInput from '../../components/FormInput';
 import { useApi } from '../../hooks/useApi';
 
-// Schéma de validation simplifié pour une matière
 const schema = z.object({
   nom: z.string().min(1, 'Le nom de la matière est requis'),
-//   coefficient: z.number().min(0.1).max(5),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -28,14 +26,12 @@ export default function MatiereDetail() {
     resolver: zodResolver(schema),
   });
 
-  // Chargement des données de la matière
   useEffect(() => {
     const fetchMatiere = async () => {
       try {
         const response = await getMatiere(Number(id));
         reset({
           nom: response.data.nom,
-        //   coefficient: response.data.coefficient || 1
         });
       } catch (error) {
         Alert.alert('Erreur', 'Impossible de charger la matière');
